@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voter - QCM Live</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col p-6 font-sans">
+    <div class="max-w-md w-full mx-auto flex-1 flex flex-col justify-center">
+        <div class="text-indigo-400 font-bold text-sm uppercase tracking-wider mb-2" id="q-counter">Question</div>
+        <h1 id="question-text" class="text-2xl font-bold mb-6">Chargement...</h1>
+        <div id="message-box" class="hidden p-4 rounded-xl mb-6 text-center font-semibold"></div>
+        <div id="buttons-container" class="space-y-3"></div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        socket.on('stateUpdate', (state) => {
+            document.getElementById('q-counter').innerText = `Question ${state.questionIndex + 1} / ${state.totalQuestions}`;
+            document.getElementById('question-text').innerText = state.question.text;
+
+            const voteKey = `voted_round_${state.roundId}`;
+            const hasVoted = localStorage.getItem(voteKey);
+            const msgBox = document.getElementById('message-box');
+            const container = document.getElementById('buttons-container');
+            container.innerHTML = '';
+
+            if (hasVoted !== null) {
+                msgBox.innerText = "✅ Vote enregistré ! Regarde l'écran.";
+                msgBox.className = "p-4 rounded-xl mb-6 text-center font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                msgBox.classList.remove('hidden');
+            } else if (state.isLocked) {
+                msgBox.innerText = "🔒 Les votes sont fermés.";
+                msgBox.className = "p-4 rounded-xl mb-6 text-center font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30";
+                msgBox.classList.remove('hidden');
+            } else {
+                msgBox.classList.add('hidden');
+            }
+
+            state.question.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                const isSelected = hasVoted == idx;
+                btn.disabled = (hasVoted !== null || state.isLocked);
+                btn.className = `w-full p-4 rounded-2xl text-left font-semibold text-lg transition-all flex items-center gap-4 border ${
+                    isSelected ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-800 active:scale-95 disabled:opacity-50'
+                }`;
+                btn.innerHTML = `
+                    <span class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm font-bold shrink-0">${String.fromCharCode(65 + idx)}</span>
+                    <span>${opt}</span>
+                `;
+                btn.onclick = () => {
+                    localStorage.setItem(voteKey, idx);
+                    socket.emit('castVote', idx);
+                };
+                container.appendChild(btn);
+            });
+        });
+    </script>
+</body>
+</html>

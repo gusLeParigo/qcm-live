@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Écran Principal - QCM Live</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col justify-between p-10 font-sans">
+
+    <div class="flex justify-between items-center border-b border-slate-700 pb-5">
+        <div class="text-2xl font-bold text-indigo-400" id="q-counter">Question 1 / 1</div>
+        <div class="flex items-center gap-4">
+            <span id="status-badge" class="px-4 py-1.5 rounded-full text-sm font-semibold bg-emerald-500/20 text-emerald-400">
+                Votes ouverts
+            </span>
+            <div class="text-2xl font-bold bg-slate-800 px-6 py-2 rounded-xl border border-slate-700">
+                👥 <span id="total-votes">0</span> votes
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex items-center gap-12 my-8">
+        <div class="flex-1 space-y-6">
+            <h1 id="question-text" class="text-4xl lg:text-5xl font-extrabold leading-tight">Chargement...</h1>
+            <div id="options-container" class="space-y-4 pt-4"></div>
+        </div>
+
+        <div class="bg-white text-slate-900 p-6 rounded-3xl shadow-2xl flex flex-col items-center justify-center w-72 shrink-0">
+            <p class="font-bold text-lg mb-4 text-center">Scannez pour voter</p>
+            <div id="qrcode" class="p-2 bg-white"></div>
+            <p id="vote-url" class="text-xs text-slate-500 mt-4 break-all text-center"></p>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const voteUrl = window.location.origin + '/vote.html';
+        
+        new QRCode(document.getElementById("qrcode"), { text: voteUrl, width: 200, height: 200 });
+        document.getElementById('vote-url').innerText = voteUrl;
+
+        socket.on('stateUpdate', (state) => {
+            document.getElementById('q-counter').innerText = `Question ${state.questionIndex + 1} / ${state.totalQuestions}`;
+            document.getElementById('question-text').innerText = state.question.text;
+            document.getElementById('total-votes').innerText = state.totalVotes;
+
+            const badge = document.getElementById('status-badge');
+            badge.innerText = state.isLocked ? "Votes verrouillés" : "Votes ouverts";
+            badge.className = state.isLocked 
+                ? "px-4 py-1.5 rounded-full text-sm font-semibold bg-rose-500/20 text-rose-400"
+                : "px-4 py-1.5 rounded-full text-sm font-semibold bg-emerald-500/20 text-emerald-400";
+
+            const maxVotes = Math.max(...state.votes);
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            state.question.options.forEach((opt, idx) => {
+                const count = state.votes[idx];
+                const percent = state.totalVotes > 0 ? Math.round((count / state.totalVotes) * 100) : 0;
+                const isWinner = state.showResults && maxVotes > 0 && count === maxVotes;
+
+                const borderClass = isWinner ? 'border-emerald-400 bg-emerald-950/50 ring-2 ring-emerald-400' : 'border-slate-700 bg-slate-800/80';
+                const barColor = isWinner ? 'bg-emerald-500' : 'bg-indigo-500';
+
+                container.innerHTML += `
+                    <div class="relative overflow-hidden rounded-2xl border ${borderClass} p-5 transition-all duration-500">
+                        ${state.showResults ? `<div class="absolute top-0 left-0 h-full ${barColor} opacity-25 transition-all duration-700" style="width: ${percent}%"></div>` : ''}
+                        <div class="relative flex justify-between items-center z-10">
+                            <span class="text-2xl font-semibold flex items-center gap-4">
+                                <span class="w-9 h-9 rounded-lg bg-slate-700 flex items-center justify-center text-base font-bold">${String.fromCharCode(65 + idx)}</span>
+                                ${opt}
+                                ${isWinner ? '<span class="ml-2 text-emerald-400 text-lg font-bold">👑 Bonne réponse (Majorité)</span>' : ''}
+                            </span>
+                            ${state.showResults ? `<span class="text-2xl font-bold">${percent}% <span class="text-sm text-slate-400 font-normal">(${count})</span></span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+        });
+    </script>
+</body>
+</html>

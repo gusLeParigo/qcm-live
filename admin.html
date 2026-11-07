@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - QCM Live</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-5 font-sans">
+    <div class="max-w-md mx-auto space-y-6">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-bold text-indigo-400">⚙️ Télécommande</h1>
+            <input type="password" id="pin-input" placeholder="Code PIN (1234)" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm w-36 text-center focus:outline-none focus:border-indigo-500">
+        </div>
+        
+        <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-2">
+            <div class="text-xs text-slate-400 uppercase font-bold" id="q-info">Question</div>
+            <div class="text-lg font-bold" id="q-text">...</div>
+            <div class="text-sm text-emerald-400 font-semibold pt-1">Votes reçus : <span id="v-count">0</span></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button onclick="send('prevQuestion')" class="p-4 bg-slate-800 border border-slate-700 rounded-xl font-bold active:scale-95">⬅️ Précédente</button>
+            <button onclick="send('nextQuestion')" class="p-4 bg-indigo-600 rounded-xl font-bold active:scale-95">Suivante ➡️</button>
+            <button id="btn-lock" onclick="send('toggleLock')" class="p-4 bg-amber-600 rounded-xl font-bold active:scale-95">🔒 Verrouiller</button>
+            <button id="btn-reveal" onclick="send('toggleResults')" class="p-4 bg-emerald-600 rounded-xl font-bold active:scale-95">👁️ Révéler</button>
+        </div>
+
+        <div class="flex gap-3">
+            <button onclick="send('resetVotes')" class="flex-1 p-3 bg-slate-800 border border-slate-700 text-sm rounded-xl font-semibold">🔄 Reset votes</button>
+            <button onclick="send('deleteCurrentQuestion')" class="p-3 bg-rose-950 border border-rose-800 text-rose-300 text-sm rounded-xl font-semibold">🗑️ Supprimer Q.</button>
+        </div>
+
+        <!-- Ajout de question en direct -->
+        <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700 space-y-3">
+            <h2 class="font-bold text-sm text-indigo-300">➕ Ajouter une question en direct</h2>
+            <input id="new-q-text" type="text" placeholder="Intitulé de la question..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm">
+            <input id="opt-1" type="text" placeholder="Réponse A" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <input id="opt-2" type="text" placeholder="Réponse B" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <input id="opt-3" type="text" placeholder="Réponse C (optionnel)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <input id="opt-4" type="text" placeholder="Réponse D (optionnel)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <button onclick="addQuestion()" class="w-full p-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-sm">Créer et afficher</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const pinInput = document.getElementById('pin-input');
+        pinInput.value = localStorage.getItem('admin_pin') || '';
+        pinInput.onchange = () => localStorage.setItem('admin_pin', pinInput.value);
+
+        function send(action, payload = null) {
+            localStorage.setItem('admin_pin', pinInput.value);
+            socket.emit('adminAction', { pin: pinInput.value, action, payload });
+        }
+
+        function addQuestion() {
+            const text = document.getElementById('new-q-text').value.trim();
+            const opts = [
+                document.getElementById('opt-1').value.trim(),
+                document.getElementById('opt-2').value.trim(),
+                document.getElementById('opt-3').value.trim(),
+                document.getElementById('opt-4').value.trim()
+            ].filter(Boolean);
+
+            if (!text || opts.length < 2) return alert("Il faut une question et au moins 2 réponses.");
+            send('addQuestion', { text, options: opts });
+            document.getElementById('new-q-text').value = '';
+            ['opt-1','opt-2','opt-3','opt-4'].forEach(id => document.getElementById(id).value = '');
+        }
+
+        socket.on('adminAuthError', (msg) => alert("❌ " + msg));
+
+        socket.on('stateUpdate', (state) => {
+            document.getElementById('q-info').innerText = `Question ${state.questionIndex + 1} / ${state.totalQuestions}`;
+            document.getElementById('q-text').innerText = state.question.text;
+            document.getElementById('v-count').innerText = state.totalVotes;
+            document.getElementById('btn-lock').innerText = state.isLocked ? "🔓 Déverrouiller" : "🔒 Verrouiller";
+            document.getElementById('btn-reveal').innerText = state.showResults ? "🙈 Masquer" : "👁️ Révéler";
+        });
+    </script>
+</body>
+</html>
